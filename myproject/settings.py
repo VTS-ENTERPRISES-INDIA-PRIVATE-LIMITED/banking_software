@@ -53,10 +53,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',  # Allow requests from localhost (React frontend)
-    'https://project-yutu-backend.onrender.com',  # Allow requests from your backend (if you are making server-to-server requests)
-]
+# CORS_ALLOWED_ORIGINS = [
+#     'http://localhost:3000',  # Allow requests from localhost (React frontend)
+#     'https://project-yutu-backend.onrender.com',  # Allow requests from your backend (if you are making server-to-server requests)
+# ]
 
 CORS_ALLOW_ALL_ORIGINS = True
 
