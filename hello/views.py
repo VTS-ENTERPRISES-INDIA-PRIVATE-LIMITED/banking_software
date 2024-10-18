@@ -11,7 +11,7 @@ import pandas as pd
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from googletrans import Translator
-from deep_translator import GoogleTranslator # type: ignore
+from deep_translator import GoogleTranslator  # type: ignore
 
 
 @csrf_exempt 

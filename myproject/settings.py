@@ -54,8 +54,9 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    # 'http://localhost:3000',  # Allow requests from localhost (React frontend)
-    'https://project-yutu-backend.onrender.com',  # Allow requests from your backend (if you are making server-to-server requests)
+    'http://localhost:3000', 
+    'https://project-yutu-backend.onrender.com',  
+    'https://banking-software-6g0m.onrender.com',
     "http://127.0.0.1:8000",
     "https://postman.com",
 ]
