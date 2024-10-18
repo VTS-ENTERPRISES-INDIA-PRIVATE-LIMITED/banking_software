@@ -1,3 +1,4 @@
+import uuid
 from django.http import JsonResponse
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -46,10 +47,9 @@ def translate_text(request):
 def generate_speech(request):
     if request.method == 'POST':
         try:
-           
             data = json.loads(request.body)
-            text = data.get('text')  
-            language = data.get('language')  
+            text = data.get('text')
+            language = data.get('language')
 
             if not text or not language:
                 return JsonResponse({"error": "Text and language are required"}, status=400)
@@ -58,8 +58,17 @@ def generate_speech(request):
             tts = gTTS(text=text, lang=language)
             audio_file = "translated_speech.mp3"
 
+            
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            relative_audio_dir = "generated_audios" 
+            audio_dir_path = os.path.join(base_dir, relative_audio_dir)
+
+            
+            if not os.path.exists(audio_dir_path):
+                os.makedirs(audio_dir_path)
+
            
-            file_path = os.path.join("D:\Robot\myproject\hello", audio_file)  
+            file_path = os.path.join(audio_dir_path, audio_file)
             tts.save(file_path)
 
             
@@ -69,6 +78,10 @@ def generate_speech(request):
             
             response = HttpResponse(file_data, content_type='audio/mpeg')
             response['Content-Disposition'] = f'attachment; filename="{audio_file}"'
+
+           
+            relative_path = os.path.relpath(file_path, base_dir)
+            response['X-Audio-File'] = relative_path
 
             return response
 
@@ -197,17 +210,74 @@ def generate_speech(request):
 
 IMAGE_FOLDER = 'images/'
 
+# @csrf_exempt
+# def customer_face_recognition(request):
+#     if request.method == 'POST':
+#         try:
+#             image = request.FILES.get('image')
+
+#             if not image:
+#                 return JsonResponse({"error": "Image file is required"}, status=400)
+
+#             base_dir = os.path.dirname(os.path.abspath(__file__))
+
+#             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
+
+#             try:
+#                 df = pd.read_excel(excel_path)
+#             except Exception as e:
+#                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
+
+#             existing_image = df[df['ImagePath'].apply(lambda x: os.path.basename(x) == image.name)]
+
+#             if not existing_image.empty:
+#                 existing_customer_name = existing_image.iloc[0]['CustomerName']
+#                 return JsonResponse({"message": f"Welcome {existing_customer_name}!"}, status=200)
+#             else:
+#                 return JsonResponse({"message": "Looks like you are new to our bank. Please register."}, status=400)
+
+#         except Exception as e:
+#             return JsonResponse({"error": str(e)}, status=500)
+#     else:
+#         return JsonResponse({"error": "POST method required"}, status=405)
+
+
+
 @csrf_exempt
 def customer_face_recognition(request):
     if request.method == 'POST':
         try:
             image = request.FILES.get('image')
-
+            language = request.POST.get('language', 'en')  
             if not image:
                 return JsonResponse({"error": "Image file is required"}, status=400)
 
+           
+            welcome_messages = {
+                'en': "Welcome!",
+                'ta': "வணக்கம்!",
+                'te': "స్వాగతం!",
+                'hi': "स्वागत है!",
+                'pa': "ਸੁਆਗਤ ਹੈ!"
+            }
+
+           
+            registration_messages = {
+                'en': "Looks like you are new to our bank. Please register.",
+                'ta': "நீங்கள் எங்கள் வங்கியில் புதியவராக இருப்பீர்கள். தயவுசெய்து பதிவு செய்யவும்.",
+                'te': "మీరు మా బ్యాంక్‌కు కొత్తగా ఉన్నారు. దయచేసి నమోదు చేసుకోండి.",
+                'hi': "आप हमारे बैंक में नए हैं। कृपया पंजीकरण करें।",
+                'pa': "ਤੁਸੀਂ ਸਾਡੇ ਬੈਂਕ ਵਿੱਚ ਨਵੇਂ ਹੋ। ਕਿਰਪਾ ਕਰਕੇ ਰਜਿਸਟਰ ਕਰੋ।"
+            }
+
+            
+            if language not in welcome_messages:
+                return JsonResponse({"error": f"Unsupported language code: {language}"}, status=400)
+
+           
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
+            
             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
 
             try:
@@ -215,19 +285,48 @@ def customer_face_recognition(request):
             except Exception as e:
                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
 
+            
             existing_image = df[df['ImagePath'].apply(lambda x: os.path.basename(x) == image.name)]
 
             if not existing_image.empty:
                 existing_customer_name = existing_image.iloc[0]['CustomerName']
-                return JsonResponse({"message": f"Welcome {existing_customer_name}!"}, status=200)
+                message = f"{welcome_messages[language]} {existing_customer_name}!"
             else:
-                return JsonResponse({"message": "Looks like you are new to our bank. Please register."}, status=400)
+                message = registration_messages[language]
+
+            
+            tts = gTTS(text=message, lang=language, slow=False)
+
+            
+            unique_filename = f"speech_{language}_{os.path.splitext(image.name)[0]}_{str(uuid.uuid4())[:8]}.mp3"
+
+            
+            audio_dir = os.path.join(base_dir, "generated_audios", language)
+            if not os.path.exists(audio_dir):
+                os.makedirs(audio_dir)
+
+            
+            audio_file_path = os.path.join(audio_dir, unique_filename)
+            tts.save(audio_file_path)
+
+            
+            relative_audio_path = os.path.relpath(audio_file_path, base_dir)
+
+            
+            response = JsonResponse({
+                "message": message,
+                "language": language
+            })
+
+            
+            response['X-Audio-File'] = relative_audio_path
+
+            return response
 
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
     else:
         return JsonResponse({"error": "POST method required"}, status=405)
-    
 
 
 @csrf_exempt
