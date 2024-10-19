@@ -13,6 +13,7 @@ from django.core.files.base import ContentFile
 from googletrans import Translator
 from deep_translator import GoogleTranslator  # type: ignore
 import face_recognition
+from PIL import Image 
 
 
 @csrf_exempt 
@@ -328,7 +329,6 @@ def customer_face_recognition(request):
             if not image:
                 return JsonResponse({"error": "Image file is required"}, status=400)
 
-            
             welcome_messages = {
                 'en': "Welcome!",
                 'ta': "வணக்கம்!",
@@ -356,7 +356,7 @@ def customer_face_recognition(request):
             except Exception as e:
                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
 
-            
+            # Load the uploaded image directly
             uploaded_image = face_recognition.load_image_file(image)
             uploaded_face_encodings = face_recognition.face_encodings(uploaded_image)
 
@@ -368,22 +368,25 @@ def customer_face_recognition(request):
             customer_found = False
             existing_customer_name = ""
 
-          
             for index, row in df.iterrows():
-                stored_image_path = row['ImagePath']
-                stored_image = face_recognition.load_image_file(stored_image_path)
-                stored_face_encodings = face_recognition.face_encodings(stored_image)
+                stored_image_path = row['ImagePath']  # This should be the relative path
+                stored_image_path_full = os.path.join(base_dir, stored_image_path)
 
-                if stored_face_encodings:
-                    stored_face_encoding = stored_face_encodings[0]
+                # Load the stored image using the relative path
+                if os.path.exists(stored_image_path_full):
+                    stored_image = face_recognition.load_image_file(stored_image_path_full)
+                    stored_face_encodings = face_recognition.face_encodings(stored_image)
 
-                   
-                    match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
+                    if stored_face_encodings:
+                        stored_face_encoding = stored_face_encodings[0]
 
-                    if match[0]:
-                        customer_found = True
-                        existing_customer_name = row['CustomerName']
-                        break
+                        # Compare faces
+                        match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
+
+                        if match[0]:
+                            customer_found = True
+                            existing_customer_name = row['CustomerName']
+                            break
 
             if customer_found:
                 try:
@@ -397,7 +400,7 @@ def customer_face_recognition(request):
                 message = registration_messages[language]
                 status_code = 401
 
-           
+            # Generate audio response
             tts = gTTS(text=message, lang=language, slow=False)
             unique_filename = f"speech_{language}_{str(uuid.uuid4())[:8]}.mp3"
             audio_dir = os.path.join(base_dir, "generated_audios", language)
@@ -434,18 +437,24 @@ def customer_registration(request):
                 return JsonResponse({"error": "Customer name and image are required"}, status=400)
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
-
-           
             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
 
-            
-            try:
-                df = pd.read_excel(excel_path)
-            except Exception as e:
-                return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
+            # Create the images directory if it doesn't exist
+            IMAGE_FOLDER = os.path.join(base_dir, 'images/')
+            if not os.path.exists(IMAGE_FOLDER):
+                os.makedirs(IMAGE_FOLDER)
 
-            
-            uploaded_image = face_recognition.load_image_file(image)
+            # Save the uploaded image file
+            image_save_path = os.path.join(IMAGE_FOLDER, image.name)
+
+            # Check if the image already exists
+            if os.path.exists(image_save_path):
+                return JsonResponse({"error": "This face is already registered with another customer."}, status=400)
+            else:
+                default_storage.save(image_save_path, ContentFile(image.read()))
+
+            # Load the uploaded image for face recognition
+            uploaded_image = face_recognition.load_image_file(image_save_path)
             uploaded_face_encodings = face_recognition.face_encodings(uploaded_image)
 
             if not uploaded_face_encodings:
@@ -453,42 +462,41 @@ def customer_registration(request):
 
             uploaded_face_encoding = uploaded_face_encodings[0]
 
-            
+            # Try to read the Excel file
+            try:
+                df = pd.read_excel(excel_path)
+            except Exception as e:
+                return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
+
+            # Check if the customer already exists by comparing faces
             for index, row in df.iterrows():
                 stored_image_path = row['ImagePath']
-                stored_image = face_recognition.load_image_file(stored_image_path)
-                stored_face_encodings = face_recognition.face_encodings(stored_image)
+                stored_image_path_full = os.path.join(base_dir, stored_image_path)  # Construct the full path
 
-                if stored_face_encodings:
-                    stored_face_encoding = stored_face_encodings[0]
+                # Load the stored image
+                if os.path.exists(stored_image_path_full):
+                    stored_image = face_recognition.load_image_file(stored_image_path_full)
+                    stored_face_encodings = face_recognition.face_encodings(stored_image)
 
-                   
-                    match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
+                    if stored_face_encodings:
+                        stored_face_encoding = stored_face_encodings[0]
 
-                    if match[0]:
-                        return JsonResponse({"error": "This face is already registered with another customer."}, status=400)
+                        # Compare the uploaded face with stored face encoding
+                        match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
 
-            
-            IMAGE_FOLDER = os.path.join(base_dir, 'images/')
-            if not os.path.exists(IMAGE_FOLDER):
-                os.makedirs(IMAGE_FOLDER)
+                        if match[0]:
+                            return JsonResponse({"error": "This face is already registered with another customer."}, status=400)
 
-            image_save_path = os.path.join(IMAGE_FOLDER, image.name)
-            image_absolute_path = default_storage.save(image_save_path, ContentFile(image.read()))
-
-           
-            relative_image_path = os.path.relpath(image_save_path, base_dir).replace('\\', '/')
-
-           
+            # Add the new customer data to the Excel file
             new_customer_data = pd.DataFrame({
                 'CustomerName': [customer_name],
-                'ImagePath': [relative_image_path]  
+                'ImagePath': [f"images/{image.name}"]  # Store only the relative path
             })
 
-           
+            # Append the new customer data to the existing DataFrame
             df = pd.concat([df, new_customer_data], ignore_index=True)
 
-           
+            # Save the updated DataFrame back to the Excel file
             df.to_excel(excel_path, index=False)
 
             return JsonResponse({"message": "You are successfully registered"}, status=201)
