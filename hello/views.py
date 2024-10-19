@@ -12,13 +12,13 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from googletrans import Translator
 from deep_translator import GoogleTranslator  # type: ignore
+import face_recognition
 
 
 @csrf_exempt 
 def translate_text(request):
     if request.method == 'POST':
         try:
-           
             data = json.loads(request.body)
             texts = data.get('texts')  
             target_language = data.get('target_language')  
@@ -26,15 +26,11 @@ def translate_text(request):
             if not texts or not target_language:
                 return JsonResponse({"error": "Invalid data"}, status=400)
 
-            
             def translate_individual_text(text, target_language):                
-                translator = Translator(to_lang=target_language)
+                translator = GoogleTranslator(source='auto', target=target_language)
                 return translator.translate(text)
 
-            
             translated_texts = [translate_individual_text(text, target_language) for text in texts]
-
-           
             return JsonResponse({"translated_texts": translated_texts}, status=200)
 
         except Exception as e:
@@ -245,17 +241,94 @@ IMAGE_FOLDER = 'images/'
 
 
 
+# @csrf_exempt
+# def customer_face_recognition(request):
+#     if request.method == 'POST':
+#         try:
+#             image = request.FILES.get('image')
+#             language = request.POST.get('language', 'en') 
+
+#             if not image:
+#                 return JsonResponse({"error": "Image file is required"}, status=400)
+
+#             # Define welcome and registration messages
+#             welcome_messages = {
+#                 'en': "Welcome!",
+#                 'ta': "வணக்கம்!",
+#                 'te': "స్వాగతం!",
+#                 'hi': "स्वागत है!",
+#                 'pa': "ਸੁਆਗਤ ਹੈ!"
+#             }
+
+#             registration_messages = {
+#                 'en': "Looks like you are new to our bank. Please register.",
+#                 'ta': "நீங்கள் எங்கள் வங்கியில் புதியவராக இருப்பீர்கள். தயவுசெய்து பதிவு செய்யவும்.",
+#                 'te': "మీరు మా బ్యాంకుకు కొత్తగా ఉన్నారు. దయచేసి నమోదు చేసుకోండి.",
+#                 'hi': "आप हमारे बैंक में नए हैं। कृपया पंजीकरण करें।",
+#                 'pa': "ਤੁਸੀਂ ਸਾਡੇ ਬੈਂਕ ਵਿੱਚ ਨਵੇਂ ਹੋ। ਕਿਰਪਾ ਕਰਕੇ ਰਜਿਸਟਰ ਕਰੋ।"
+#             }
+
+#             if language not in welcome_messages:
+#                 return JsonResponse({"error": f"Unsupported language code: {language}"}, status=400)
+
+#             base_dir = os.path.dirname(os.path.abspath(__file__))
+#             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
+
+#             try:
+#                 df = pd.read_excel(excel_path)
+#             except Exception as e:
+#                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
+
+#             existing_image = df[df['ImagePath'].apply(lambda x: os.path.basename(x) == image.name)]
+
+#             if not existing_image.empty:
+#                 existing_customer_name = existing_image.iloc[0]['CustomerName']
+
+#                 try:
+#                     transliterated_name = GoogleTranslator(source='en', target=language).translate(existing_customer_name)
+#                 except Exception as e:
+#                     return JsonResponse({"error": f"Failed to transliterate name: {str(e)}"}, status=500)
+
+#                 message = f"{welcome_messages[language]} {transliterated_name}!"
+#             else:
+#                 message = registration_messages[language]
+
+#             tts = gTTS(text=message, lang=language, slow=False)
+#             unique_filename = f"speech_{language}_{os.path.splitext(image.name)[0]}_{str(uuid.uuid4())[:8]}.mp3"
+#             audio_dir = os.path.join(base_dir, "generated_audios", language)
+#             if not os.path.exists(audio_dir):
+#                 os.makedirs(audio_dir)
+
+#             audio_file_path = os.path.join(audio_dir, unique_filename)
+#             tts.save(audio_file_path)
+
+#             relative_audio_path = os.path.relpath(audio_file_path, base_dir)
+
+#             response = JsonResponse({
+#                 "message": message,
+#                 "language": language
+#             })
+#             response['X-Audio-File'] = relative_audio_path
+
+#             return response
+
+#         except Exception as e:
+#             return JsonResponse({"error": str(e)}, status=500)
+#     else:
+#         return JsonResponse({"error": "POST method required"}, status=405)
+
+
 @csrf_exempt
 def customer_face_recognition(request):
     if request.method == 'POST':
         try:
             image = request.FILES.get('image')
-            language = request.POST.get('language', 'en')  # Default to English if not specified
+            language = request.POST.get('language', 'en') 
 
             if not image:
                 return JsonResponse({"error": "Image file is required"}, status=400)
 
-            # Define welcome and registration messages
+            
             welcome_messages = {
                 'en': "Welcome!",
                 'ta': "வணக்கம்!",
@@ -267,7 +340,7 @@ def customer_face_recognition(request):
             registration_messages = {
                 'en': "Looks like you are new to our bank. Please register.",
                 'ta': "நீங்கள் எங்கள் வங்கியில் புதியவராக இருப்பீர்கள். தயவுசெய்து பதிவு செய்யவும்.",
-                'te': "మీరు మా బ్యాంక్‌కు కొత్తగా ఉన్నారు. దయచేసి నమోదు చేసుకోండి.",
+                'te': "మీరు మా బ్యాంకుకు కొత్తగా ఉన్నారు. దయచేసి నమోదు చేసుకోండి.",
                 'hi': "आप हमारे बैंक में नए हैं। कृपया पंजीकरण करें।",
                 'pa': "ਤੁਸੀਂ ਸਾਡੇ ਬੈਂਕ ਵਿੱਚ ਨਵੇਂ ਹੋ। ਕਿਰਪਾ ਕਰਕੇ ਰਜਿਸਟਰ ਕਰੋ।"
             }
@@ -276,59 +349,70 @@ def customer_face_recognition(request):
                 return JsonResponse({"error": f"Unsupported language code: {language}"}, status=400)
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
-
-            # Path to Excel file (customer data)
             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
-
+            
             try:
                 df = pd.read_excel(excel_path)
             except Exception as e:
                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
 
-            # Check if image exists in the DataFrame
-            existing_image = df[df['ImagePath'].apply(lambda x: os.path.basename(x) == image.name)]
+            
+            uploaded_image = face_recognition.load_image_file(image)
+            uploaded_face_encodings = face_recognition.face_encodings(uploaded_image)
 
-            if not existing_image.empty:
-                # Extract customer name
-                existing_customer_name = existing_image.iloc[0]['CustomerName']
+            if not uploaded_face_encodings:
+                return JsonResponse({"error": "No faces detected in the uploaded image."}, status=400)
 
-                # Dynamic transliteration of the customer name
+            uploaded_face_encoding = uploaded_face_encodings[0]
+
+            customer_found = False
+            existing_customer_name = ""
+
+          
+            for index, row in df.iterrows():
+                stored_image_path = row['ImagePath']
+                stored_image = face_recognition.load_image_file(stored_image_path)
+                stored_face_encodings = face_recognition.face_encodings(stored_image)
+
+                if stored_face_encodings:
+                    stored_face_encoding = stored_face_encodings[0]
+
+                   
+                    match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
+
+                    if match[0]:
+                        customer_found = True
+                        existing_customer_name = row['CustomerName']
+                        break
+
+            if customer_found:
                 try:
                     transliterated_name = GoogleTranslator(source='en', target=language).translate(existing_customer_name)
                 except Exception as e:
                     return JsonResponse({"error": f"Failed to transliterate name: {str(e)}"}, status=500)
 
-                # Build the message with the dynamically transliterated name
                 message = f"{welcome_messages[language]} {transliterated_name}!"
+                status_code = 200
             else:
-                # Registration message for new customer
                 message = registration_messages[language]
+                status_code = 401
 
-            # Generate speech using gTTS
+           
             tts = gTTS(text=message, lang=language, slow=False)
-
-            # Create a unique filename for the audio file
-            unique_filename = f"speech_{language}_{os.path.splitext(image.name)[0]}_{str(uuid.uuid4())[:8]}.mp3"
-
-            # Create a directory for storing audio files by language
+            unique_filename = f"speech_{language}_{str(uuid.uuid4())[:8]}.mp3"
             audio_dir = os.path.join(base_dir, "generated_audios", language)
             if not os.path.exists(audio_dir):
                 os.makedirs(audio_dir)
 
-            # Save the audio file in the language-specific folder
             audio_file_path = os.path.join(audio_dir, unique_filename)
             tts.save(audio_file_path)
 
-            # Get relative audio file path
             relative_audio_path = os.path.relpath(audio_file_path, base_dir)
 
-            # Prepare response
             response = JsonResponse({
                 "message": message,
                 "language": language
-            })
-
-            # Include the relative audio path in the response header
+            }, status=status_code)
             response['X-Audio-File'] = relative_audio_path
 
             return response
@@ -349,10 +433,9 @@ def customer_registration(request):
             if not customer_name or not image:
                 return JsonResponse({"error": "Customer name and image are required"}, status=400)
 
-            
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
-           
+            
             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
 
            
@@ -361,9 +444,36 @@ def customer_registration(request):
             except Exception as e:
                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
 
+           
+            uploaded_image = face_recognition.load_image_file(image)
+            uploaded_face_encodings = face_recognition.face_encodings(uploaded_image)
+
+            if not uploaded_face_encodings:
+                return JsonResponse({"error": "No faces detected in the uploaded image."}, status=400)
+
+            uploaded_face_encoding = uploaded_face_encodings[0]
+
             
-            IMAGE_FOLDER = 'images/'
-            image_save_path = f"{IMAGE_FOLDER}{image.name}"  # Relative path
+            for index, row in df.iterrows():
+                stored_image_path = row['ImagePath']
+                stored_image = face_recognition.load_image_file(stored_image_path)
+                stored_face_encodings = face_recognition.face_encodings(stored_image)
+
+                if stored_face_encodings:
+                    stored_face_encoding = stored_face_encodings[0]
+
+                   
+                    match = face_recognition.compare_faces([stored_face_encoding], uploaded_face_encoding)
+
+                    if match[0]:
+                        return JsonResponse({"error": "This face is already registered with another customer."}, status=400)
+
+           
+            IMAGE_FOLDER = os.path.join(base_dir, 'images/')
+            if not os.path.exists(IMAGE_FOLDER):
+                os.makedirs(IMAGE_FOLDER)
+
+            image_save_path = os.path.join(IMAGE_FOLDER, image.name)
             image_absolute_path = default_storage.save(image_save_path, ContentFile(image.read()))
 
             
@@ -372,10 +482,10 @@ def customer_registration(request):
                 'ImagePath': [image_save_path] 
             })
 
-           
+          
             df = pd.concat([df, new_customer_data], ignore_index=True)
 
-            
+           
             df.to_excel(excel_path, index=False)
 
             return JsonResponse({"message": "You are successfully registered"}, status=201)
