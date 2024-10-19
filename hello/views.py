@@ -435,16 +435,16 @@ def customer_registration(request):
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
 
-            
+           
             excel_path = os.path.join(base_dir, "CustomerData.xlsx")
 
-           
+            
             try:
                 df = pd.read_excel(excel_path)
             except Exception as e:
                 return JsonResponse({"error": f"Failed to read Excel file: {str(e)}"}, status=500)
 
-           
+            
             uploaded_image = face_recognition.load_image_file(image)
             uploaded_face_encodings = face_recognition.face_encodings(uploaded_image)
 
@@ -468,7 +468,7 @@ def customer_registration(request):
                     if match[0]:
                         return JsonResponse({"error": "This face is already registered with another customer."}, status=400)
 
-           
+            
             IMAGE_FOLDER = os.path.join(base_dir, 'images/')
             if not os.path.exists(IMAGE_FOLDER):
                 os.makedirs(IMAGE_FOLDER)
@@ -476,13 +476,16 @@ def customer_registration(request):
             image_save_path = os.path.join(IMAGE_FOLDER, image.name)
             image_absolute_path = default_storage.save(image_save_path, ContentFile(image.read()))
 
-            
+           
+            relative_image_path = os.path.relpath(image_save_path, base_dir).replace('\\', '/')
+
+           
             new_customer_data = pd.DataFrame({
                 'CustomerName': [customer_name],
-                'ImagePath': [image_save_path] 
+                'ImagePath': [relative_image_path]  
             })
 
-          
+           
             df = pd.concat([df, new_customer_data], ignore_index=True)
 
            
