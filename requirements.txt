@@ -1,3 +1,4 @@
+cmake
 asgiref
 beautifulsoup4
 certifi
